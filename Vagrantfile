@@ -27,7 +27,9 @@ $configureBox = <<-SHELL
   # スワップを無効化する
   # スワップ領域がないのでコメントアウト
   # swapoff -a
+  # プロビジョニングで実行する場合はバックスラッシュのエスケープが必要なことに注意
   # sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+  # sed -i '/ swap / s/^\\(.*\\)$/#\\1/g' /etc/fstab
 
   # Kubernetesの前提パッケージ
   # apt-get update
