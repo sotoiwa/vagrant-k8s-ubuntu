@@ -9,7 +9,7 @@ $configureBox = <<-SHELL
 
   # パッケージ更新
   apt-get update
-  apt-get upgrade -y
+  # apt-get upgrade -y
 
   # Dockerの前提パッケージ
   apt-get install -y apt-transport-https ca-certificates curl software-properties-common
