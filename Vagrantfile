@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 # Workerノードの数
-worker_count=2
+worker_count=1
 
 # 共通のプロビジョニングスクリプト
 $configureBox = <<-SHELL
@@ -18,8 +18,23 @@ $configureBox = <<-SHELL
   add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   # Dockerのインストール
   apt-get update
-  apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 17.03 | head -1 | awk '{print $3}')
+  apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
   apt-mark hold docker-ce
+  # Dockerデーモンの設定
+  cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+  mkdir -p /etc/systemd/system/docker.service.d
+  systemctl daemon-reload
+  systemctl restart docker
+
   # vagrantユーザーをdockerグループに追加
   usermod -aG docker vagrant
 
@@ -45,8 +60,9 @@ deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
   # kubeadm、kubelet、kubectlのインストール
   apt-get update
-  # apt-get install -y kubelet=1.12.2-00 kubeadm=1.12.2-00 kubectl=1.12.2-00
-  apt-get install -y kubelet kubeadm kubectl
+  # kubeadm、kubelet、kubectlのインストール
+  VERSION=$(apt-cache madison kubeadm | grep 1.14 | head -1 | awk '{print $3}')
+  apt-get install -y kubelet=$VERSION kubeadm=$VERSION kubectl=$VERSION
   apt-mark hold kubelet kubeadm kubectl
 
   # プライベートネットワークのNICのIPアドレスを変数に格納
@@ -95,6 +111,33 @@ $configureMaster = <<-SHELL
   # sshでのパスワード認証を許可する
   sed -i "/^[^#]*PasswordAuthentication[[:space:]]no/c\PasswordAuthentication yes" /etc/ssh/sshd_config
   systemctl restart sshd
+
+  # jq
+  apt-get install -y jq
+
+  # helm
+  VERSION="v2.13.1"
+  curl -LO https://storage.googleapis.com/kubernetes-helm/helm-${VERSION}-linux-amd64.tar.gz
+  tar zxvf helm-${VERSION}-linux-amd64.tar.gz
+  cp linux-amd64/helm /usr/local/bin/
+  rm -rf linux-amd64
+  rm -f helm-${VERSION}-linux-amd64.tar.gz
+
+  # git
+  apt-get install -y git
+
+  # kubens/kubectx
+  git clone https://github.com/ahmetb/kubectx.git /opt/kubectx
+  ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx
+  ln -s /opt/kubectx/kubens /usr/local/bin/kubens
+
+  # kube-ps1
+  git clone https://github.com/jonmosco/kube-ps1.git /opt/kube-ps1
+  cat <<'EOF' >> /home/vagrant/.bashrc
+source /opt/kube-ps1/kube-ps1.sh
+KUBE_PS1_SUFFIX=') '
+PS1='$(kube_ps1)'$PS1
+EOF
 
   # kubectlの補完を有効にする
   echo "source <(kubectl completion bash)" >> /home/vagrant/.bashrc
